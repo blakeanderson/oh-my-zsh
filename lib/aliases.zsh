@@ -22,5 +22,8 @@ alias sl=ls # often screw this up
 
 alias afind='ack-grep -il'
 
+<<<<<<< HEAD
 alias x=extract
 alias reload!='. ~/.zshrc'
+=======
+>>>>>>> 762b55bb2bc0452ce3f5f2f21bc22b61936ef704
