@@ -1,0 +1,190 @@
+#!/usr/bin/env ruby
+#
+# todo_extensions
+# Blake Anderson / @banders / blake-anderson.com
+#
+# Ruby wrapper that adds additional features to todo.text 
+# For more info on todo.txt: todotxt.com 
+# 
+# - Added time tracking to tasks
+#   ex: todo_extensions -tt 3
+#     # starts tracking time spent on task '3', appends 
+#     # +TT and the time spent to the end of the task
+#     # when the user signals quit (q)
+#
+# Note: All todo.sh functionality is still availalbe through
+#       todo_extensions.  I suggest aliasing to todo_extensions,
+#       and running all actions through it.
+# 
+
+
+require 'optparse'
+require 'optparse/time'
+require 'ostruct'
+
+#
+# Options Parsing
+#
+class OptionParse  
+  def self.parse(args)
+      options = OpenStruct.new
+      opts = OptionParser.new do |opts|
+      	 opts.on("-tt", "--tracktime") do |sc|
+	   options.time_tracking = Time.now
+         end
+      end
+
+      opts.parse!(args)
+      options
+   end
+end
+
+
+#
+#  Time Tracking
+#
+class TimeTracking
+  def self.quit
+    begin
+      while c = STDIN.read_nonblock(1)
+        return true if c == 'q'
+      end
+      return false
+    rescue Errno::EINTR
+      false
+    rescue Errno::EAGAIN
+      false
+    rescue EOFError
+      true
+    end
+  end
+
+  def self.track(start_time, task)
+    puts "Tracking: #{task}"
+    puts "Press 'q' then ENTER when done"
+    loop do
+      break if quit
+    end
+    Time.now - start_time
+  end
+  
+  def self.display_time(total_seconds)
+    total_seconds = total_seconds.to_i
+    
+    days = total_seconds / 86400
+    hours = (total_seconds / 3600) - (days * 24)
+    minutes = (total_seconds / 60) - (hours * 60) - (days * 1440)
+    seconds = total_seconds % 60
+    
+    display = ''
+    display_concat = ''
+    if days > 0
+      display = display + display_concat + "#{days}d"
+      display_concat = '_'
+    end
+    if hours > 0 || days > 0
+      display = display + display_concat + "#{hours}h"
+      display_concat = '_'
+    end
+    if days == 0 && (minutes > 0 || hours > 0)
+      display = display + display_concat + "#{minutes}m"
+      display_concat = '_'
+    end
+    if hours == 0 && days == 0
+      display = display + display_concat + "#{seconds}s"
+    end
+    display
+  end
+  
+  def self.back_to_seconds(time)
+  	split_time = time.split('_')
+  	time_in_seconds = 0
+  	split_time.each do |t|
+      if ( t =~ /d/ )
+  	    days = t.split('d').first
+  		  time_in_seconds += (days * 86400).to_i
+  	  elsif ( t =~ /h/ )
+  	    hours = t.split('h').first
+  		  time_in_seconds += (hours * 3600).to_i
+  	  elsif ( t =~ /m/ )
+  	    minutes = t.split('m').first
+  		  time_in_seconds += (minutes * 60).to_i
+  	  elsif ( t =~ /s/ )
+  	    seconds = t.split('s').first
+  		  time_in_seconds += seconds.to_i
+  	  end
+  	end
+  	time_in_seconds
+  end
+
+  def self.output_time_spent(recent_time, total_time)
+    puts "Session Time: #{display_time(recent_time)}"
+    puts "Total Time:   #{total_time}"
+  end
+
+end
+
+#
+# Todo.sh interaction
+#
+class ToDoInteraction
+  def self.parse_arguments
+    arg_string = " "
+    ARGV.each do |a|
+      arg_string = arg_string + a + " "
+    end  
+    arg_string
+  end
+
+  def self.mark_as_tracked(result, task_number, time)
+  	total_time_spent = ""
+    if ( result =~ /TT/ )
+      #does your chain hang low
+      previous_time = result.scan(/spent:.*/).first.split(':').last
+      new_time = TimeTracking.back_to_seconds(previous_time) + time
+      total_time_spent = TimeTracking.display_time(new_time)
+  	  task = result.gsub!( /spent:.*/, "spent:#{total_time_spent}" )
+      task = task.gsub!( /[1-9]\s/, '')
+  	  if task != nil
+    		evaluate = "todo.sh replace #{task_number} \"#{task}\""
+    	  val = %x[#{evaluate}]
+  	  end
+  	else
+      total_time_spent = TimeTracking.display_time(time)
+      task = "todo.sh app #{task_number} +TT spent:#{total_time_spent}"
+      val = %x[#{task}]
+  	end
+    total_time_spent
+  end
+
+end
+
+
+begin
+  options = OptionParse.parse(ARGV)
+  if options.time_tracking != nil
+    if ARGV.size > 1
+      puts "To many arguments"
+    elsif ARGV.size < 1
+      puts "To few arguments"
+    else
+      task = "todo.sh ls " + ARGV[0]
+
+  	  #You cant list only the task w/ the given id #?
+      task_results = (%x[#{task}]).split(/\n/)
+  	  task_result = task_results.select { |task| task =~ /#{ARGV[0]}\s.*/ }
+      time = TimeTracking.track(options.time_tracking, task_result.first)
+      total_time = ToDoInteraction.mark_as_tracked(task_result.first, ARGV[0], time) 
+      TimeTracking.output_time_spent(time, total_time)
+    end
+  else
+    todo = "todo.sh" + ToDoInteraction.parse_arguments
+    value = %x[ #{todo} ]
+    puts value
+  end
+  
+rescue OptionParser::InvalidOption => e
+  command = e.to_s.split(' ').last
+  todo = "todo.sh " + command + ToDoInteraction.parse_arguments
+  `#{todo}`
+end
