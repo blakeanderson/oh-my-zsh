@@ -2,7 +2,6 @@ alias be="bundle exec"
 alias bi="bundle install"
 alias bl="bundle list"
 alias bu="bundle update"
-alias bp="bundle package"
 
 # The following is based on https://github.com/gma/bundler-exec
 

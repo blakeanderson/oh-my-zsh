@@ -1,0 +1,132 @@
+#!/usr/bin/env ruby
+#
+# tumbile
+# Blake Anderson / @banders
+#
+# Create Tumblr posts with Jekyll textile files
+#
+# Example:
+# tumbile 2011-04-24-Create-Tumblr-Posts-With-Jekyll-Files.textile
+#
+# This requires the RedCloth gem:
+# gem install redcloth
+#
+# Requires you set your Tumblr credentials in ~/.tumbile as a simple file of:
+# email
+# password
+
+require 'rubygems'
+require 'net/http'
+require 'uri'
+
+begin
+  require 'yaml'
+  require 'redcloth'
+rescue LoadError
+  STDERR.puts 'You are missing a library required'
+  STDERR.puts '   $ [sudo] gem install RedCloth'
+  raise FatalException.new("Missing dependency: RedCloth")
+end
+
+#
+#  Check for credentials file
+#
+config_file = "#{ENV['HOME']}/.tumbile"
+unless File.exist?(config_file)
+  puts 'Please create a file: ~/.tumbile'
+  puts '  In .tumbile, enter your email and password one per line'
+  exit!(1)
+end
+
+unless ARGV.count > 0
+  puts 'Please specify a file to post'
+  exit!(1)
+end
+
+request_data = {'type' => 'regular'}
+
+
+#
+#  Parse date from file name
+#
+if ARGV[0] =~ /\A[0-9]{4}.[0-9]{2}.[0-9]{2}.*/
+  year,month,day = ARGV[0].split('-')
+  request_data['date'] = year + '-' + month + '-' + day
+end
+
+
+#
+#  Parse credentials file
+# 
+email,password = File.read(config_file).split("\n")
+request_data['email'] = email
+request_data['password'] = password
+
+
+#
+#  Convert textile to html
+#
+front_matter_brackets = open(ARGV[0], 'r').grep(/---/).size
+puts front_matter_brackets
+contains_front_matter = false
+if front_matter_brackets >= 2
+  contains_front_matter = true
+end
+
+contents = ""
+File.open(ARGV[0], 'r')  do |f|
+    yaml_counter = 0
+    while line = f.gets
+      if yaml_counter < 2 && contains_front_matter
+        if line.include? "---"
+          yaml_counter = yaml_counter + 1
+        end
+      else
+        contents = contents + line
+      end
+    end 
+end   
+request_data['body'] = RedCloth.new(contents).to_html
+
+
+#
+#  Load Yaml front matter
+#
+if contains_front_matter
+  front_matter = YAML.load(File.open(ARGV[0], 'r'))
+  if front_matter.has_key?('title')
+    request_data['title'] = front_matter['title']
+  end
+
+  if front_matter.has_key?('categories')
+    request_data['tags'] = front_matter['categories'].gsub(/,*\s+/,',')
+  end
+
+  if front_matter.has_key?('date')
+    request_data['date'] = front_matter['date']
+  end
+
+  if front_matter.has_key?('published')
+    unless front_matter['published']
+      request_data['state'] = "draft"
+    end
+  end
+end
+request_data['state'] = "draft"
+
+
+#
+# Post to Tumblr
+#
+res = Net::HTTP.post_form(URI.parse('http://www.tumblr.com/api/write'), request_data)
+if(res.code === '201')
+  puts "Success! The new post id: #{res.body}"
+elsif(res.code === '403')
+  puts "Invalid credentials"
+else
+  puts "Error: #{res.body}"
+  puts "Status code: " + res.code
+end
+
+
+
