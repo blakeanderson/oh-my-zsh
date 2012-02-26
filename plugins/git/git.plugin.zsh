@@ -1,12 +1,24 @@
-alias gp='git push origin HEAD'
-alias gd='git diff'
-alias gc='git commit'
-alias gca='git commit -a'
+# Aliases
+alias g='git'
+compdef g=git
+alias gst='git status'
+compdef _git gst=git-status
+alias gl='git pull'
+compdef _git gl=git-pull
+alias gup='git fetch && git rebase'
+compdef _git gup=git-fetch
+alias gp='git push'
+compdef _git gp=git-push
+gdv() { git diff -w "$@" | view - }
+compdef _git gdv=git-diff
+alias gc='git commit -v'
+compdef _git gc=git-commit
+alias gca='git commit -v -a'
+compdef _git gca=git-commit
 alias gco='git checkout'
+compdef _git gco=git-checkout
+alias gcm='git checkout master'
 alias gb='git branch'
-alias gk='gitk '
-alias gcb='git checkout -b'
-
 compdef _git gb=git-branch
 alias gba='git branch -a'
 compdef _git gba=git-branch
@@ -22,12 +34,14 @@ alias gss='git status -s'
 compdef _git gss=git-status
 alias ga='git add'
 compdef _git ga=git-add
+alias gm='git merge'
+compdef _git gm=git-merge
+alias grh='git reset HEAD'
+alias grhh='git reset HEAD --hard'
 
-alias gl='git pull --prune'
-alias gs='git status -sb' # upgrade your git if -sb breaks for you. it's fun.
-alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
-alias glog="git log --graph --pretty=format:'%Cred%h%Creset %an: %s - %Creset %C(yellow)%d%Creset %Cgreen(%cr)%Creset' --abbrev-commit --date=relative"
-
+# Git and svn mix
+alias git-svn-dcommit-push='git svn dcommit && git push github master:svntrunk'
+compdef git-svn-dcommit-push=git
 
 alias gsr='git svn rebase'
 alias gsd='git svn dcommit'
